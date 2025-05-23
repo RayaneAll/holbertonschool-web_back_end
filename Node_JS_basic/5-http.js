@@ -1,32 +1,62 @@
 const http = require('http');
-const countStudents = require('./3-read_file_async');
+const fs = require('fs');
 
-const app = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  const { url } = req;
-  const path = process.argv[2];
-  if (url === '/') {
-    res.end('Hello Holberton School!');
-  } else if (url === '/students') {
-    const msg = 'This is the list of our students\n';
-    countStudents(path)
-      .then((students) => {
-        let output = '';
-        if (Array.isArray(students)) {
-          output = students.join('\n');
-        } else if (typeof students === 'string') {
-          output = students;
-        } else {
-          output = '';
+function countStudents(path) {
+  return new Promise((resolve, reject) => {
+    fs.readFile(path, 'utf8', (error, data) => {
+      if (error) {
+        reject(new Error('Cannot load the database'));
+        return;
+      }
+      const messages = [];
+      let message;
+      const content = data.toString().split('\n');
+      let students = content.filter((item) => item);
+      students = students.map((item) => item.split(','));
+      const nStudents = students.length ? students.length - 1 : 0;
+      message = `Number of students: ${nStudents}`;
+      messages.push(message);
+      const subjects = {};
+      for (const i in students) {
+        if (i !== 0) {
+          if (!subjects[students[i][3]]) subjects[students[i][3]] = [];
+          subjects[students[i][3]].push(students[i][0]);
         }
-        res.end(`${msg}${output}`);
+      }
+      delete subjects.field;
+      for (const key of Object.keys(subjects)) {
+        if (key && key !== 'undefined') {
+          message = `Number of students in ${key}: ${
+            subjects[key].length
+          }. List: ${subjects[key].join(', ')}`;
+          messages.push(message);
+        }
+      }
+      resolve(messages);
+    });
+  });
+}
+const dbPath = process.argv[2];
+const app = http.createServer((req, res) => {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/plain');
+  if (req.url === '/') {
+    res.end('Hello Holberton School!');
+  } else if (req.url === '/students') {
+    res.write('This is the list of our students\n');
+    countStudents(dbPath)
+      .then((messages) => {
+        res.end(messages.join('\n'));
       })
-      .catch((err) => {
-        res.end(`${msg}${err.message}`);
+      .catch((error) => {
+        res.end(`${error.message}`);
       });
   } else {
-    res.end('Not Found');
+    res.statusCode = 404;
+    res.end('Not found');
   }
 });
-app.listen(1245);
+app.listen(1245, () => {
+  console.log('Server running at http://localhost:1245/');
+});
 module.exports = app;
